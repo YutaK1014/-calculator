@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Calculator</title>
+  <style>
+    :root {
+      --page-bg: #08090b;
+      --card-bg: #14161a;
+      --display-bg: #050608;
+      --display-primary: #f6f7f9;
+      --display-secondary: #9ca3af;
+      --number-bg: #252932;
+      --number-hover: #303642;
+      --operator-bg: #d72638;
+      --operator-hover: #ef3346;
+      --equal-bg: #ffd23f;
+      --equal-hover: #ffe066;
+      --equal-text: #151515;
+      --clear-bg: #555b66;
+      --clear-hover: #676f7c;
+      --history-bg: #101216;
+      --history-border: #2a2f38;
+      --text: #f5f5f5;
+      --muted: #a8adb7;
+      --shadow: rgba(0, 0, 0, 0.45);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+      background: var(--page-bg);
+      color: var(--text);
+      font-family: Arial, "Hiragino Sans", "Yu Gothic", sans-serif;
+    }
+
+    .fireworks {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 20;
+    }
+
+    .calculator-shell {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      align-items: stretch;
+      gap: 16px;
+      width: min(100%, 740px);
+    }
+
+    .calculator {
+      flex: 0 0 360px;
+      padding: 20px;
+      border-radius: 8px;
+      background: var(--card-bg);
+      box-shadow: 0 22px 54px var(--shadow);
+    }
+
+    .display {
+      min-height: 104px;
+      margin-bottom: 16px;
+      padding: 14px 16px;
+      border-radius: 8px;
+      background: var(--display-bg);
+      text-align: right;
+      overflow: hidden;
+    }
+
+    .expression,
+    .result {
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+    }
+
+    .expression {
+      min-height: 26px;
+      color: var(--display-secondary);
+      font-size: 16px;
+      line-height: 1.6;
+    }
+
+    .result {
+      min-height: 46px;
+      color: var(--display-primary);
+      font-size: 36px;
+      line-height: 1.25;
+      font-weight: 700;
+    }
+
+    .buttons {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      grid-auto-rows: 62px;
+      gap: 10px;
+    }
+
+    button {
+      width: 100%;
+      height: 100%;
+      border: 0;
+      border-radius: 8px;
+      color: var(--text);
+      font-size: 20px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: transform 120ms ease, filter 120ms ease, background 120ms ease;
+    }
+
+    button:hover {
+      transform: translateY(-1px);
+    }
+
+    button:active {
+      transform: translateY(1px);
+      filter: brightness(0.92);
+    }
+
+    .number {
+      background: var(--number-bg);
+    }
+
+    .number:hover {
+      background: var(--number-hover);
+    }
+
+    .operator {
+      background: var(--operator-bg);
+    }
+
+    .operator:hover {
+      background: var(--operator-hover);
+    }
+
+    .equal {
+      background: var(--equal-bg);
+      color: var(--equal-text);
+    }
+
+    .equal:hover {
+      background: var(--equal-hover);
+    }
+
+    .clear {
+      background: var(--clear-bg);
+    }
+
+    .clear:hover {
+      background: var(--clear-hover);
+    }
+
+    .wide {
+      grid-column: span 2;
+    }
+
+    .tall {
+      grid-row: span 2;
+    }
+
+    .history {
+      flex: 1;
+      min-width: 220px;
+      padding: 12px;
+      border: 1px solid var(--history-border);
+      border-radius: 8px;
+      background: var(--history-bg);
+      box-shadow: 0 22px 54px var(--shadow);
+    }
+
+    .history-title {
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .history[open] .history-title {
+      margin-bottom: 8px;
+    }
+
+    .history-list {
+      display: grid;
+      gap: 6px;
+      min-height: 24px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      color: var(--display-secondary);
+      font-size: 14px;
+      line-height: 1.35;
+    }
+
+    .history-list li {
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+    }
+
+    @media (max-width: 700px) {
+      .calculator-shell {
+        flex-direction: column;
+      }
+
+      .calculator {
+        flex-basis: auto;
+        width: 100%;
+      }
+
+      .history {
+        min-width: 0;
+      }
+    }
+  </style>
+</head>
+<body>
+  <canvas id="fireworks" class="fireworks" aria-hidden="true"></canvas>
+
+  <main class="calculator-shell">
+    <section class="calculator" aria-label="calculator">
+      <section class="display" aria-live="polite">
+        <div id="expression" class="expression"></div>
+        <div id="display" class="result">0</div>
+      </section>
+
+      <section class="buttons" aria-label="calculator buttons">
+        <button class="clear" onclick="clearAll()">C</button>
+        <button class="operator" onclick="handlePercent()">%</button>
+        <button class="operator" onclick="handleOperator('÷')">÷</button>
+        <button class="operator" onclick="handleOperator('×')">×</button>
+
+        <button class="number" onclick="handleNumber('7')">7</button>
+        <button class="number" onclick="handleNumber('8')">8</button>
+        <button class="number" onclick="handleNumber('9')">9</button>
+        <button class="operator" onclick="handleOperator('-')">-</button>
+
+        <button class="number" onclick="handleNumber('4')">4</button>
+        <button class="number" onclick="handleNumber('5')">5</button>
+        <button class="number" onclick="handleNumber('6')">6</button>
+        <button class="operator" onclick="handleOperator('+')">+</button>
+
+        <button class="number" onclick="handleNumber('1')">1</button>
+        <button class="number" onclick="handleNumber('2')">2</button>
+        <button class="number" onclick="handleNumber('3')">3</button>
+        <button class="equal tall" onclick="calculate()">＝</button>
+
+        <button class="number wide" onclick="handleNumber('0')">0</button>
+        <button class="number" onclick="handleNumber('.')">.</button>
+      </section>
+    </section>
+
+    <details class="history" open>
+      <summary class="history-title">計算履歴</summary>
+      <ul id="historyList" class="history-list"></ul>
+    </details>
+  </main>
+
+  <script>
+    let firstNumber = null;
+    let firstNumberLabel = null;
+    let operator = null;
+    let isNewInput = true;
+    let percentApplied = false;
+    let percentLabel = null;
+    let percentValue = null;
+    let history = [];
+
+    const display = document.getElementById('display');
+    const expression = document.getElementById('expression');
+    const historyList = document.getElementById('historyList');
+    const fireworksCanvas = document.getElementById('fireworks');
+    const fireworksContext = fireworksCanvas.getContext('2d');
+    let fireworksParticles = [];
+    let fireworksAnimationId = null;
+
+    function resizeFireworksCanvas() {
+      const pixelRatio = window.devicePixelRatio || 1;
+      fireworksCanvas.width = window.innerWidth * pixelRatio;
+      fireworksCanvas.height = window.innerHeight * pixelRatio;
+      fireworksContext.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+    }
+
+    function createFireworkBurst(x, y) {
+      const colors = ['#ffd23f', '#d72638', '#ffffff', '#ff8c42', '#4cc9f0'];
+
+      for (let i = 0; i < 34; i++) {
+        const angle = (Math.PI * 2 * i) / 34;
+        const speed = 2 + Math.random() * 3.5;
+
+        fireworksParticles.push({
+          x,
+          y,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed,
+          life: 48 + Math.random() * 16,
+          age: 0,
+          size: 2 + Math.random() * 2,
+          color: colors[Math.floor(Math.random() * colors.length)]
+        });
+      }
+    }
+
+    function animateFireworks() {
+      fireworksContext.clearRect(0, 0, window.innerWidth, window.innerHeight);
+
+      fireworksParticles = fireworksParticles.filter((particle) => {
+        particle.age += 1;
+        particle.x += particle.vx;
+        particle.y += particle.vy;
+        particle.vy += 0.045;
+
+        const alpha = 1 - particle.age / particle.life;
+
+        if (alpha <= 0) {
+          return false;
+        }
+
+        fireworksContext.globalAlpha = alpha;
+        fireworksContext.fillStyle = particle.color;
+        fireworksContext.beginPath();
+        fireworksContext.arc(particle.x, particle.y, particle.size, 0, Math.PI * 2);
+        fireworksContext.fill();
+
+        return true;
+      });
+
+      fireworksContext.globalAlpha = 1;
+
+      if (fireworksParticles.length > 0) {
+        fireworksAnimationId = requestAnimationFrame(animateFireworks);
+      } else {
+        fireworksAnimationId = null;
+      }
+    }
+
+    function launchFireworks() {
+      const calculator = document.querySelector('.calculator');
+      const rect = calculator.getBoundingClientRect();
+      const centerX = rect.left + rect.width / 2;
+      const topY = rect.top + 72;
+
+      createFireworkBurst(centerX - 74, topY + 24);
+      createFireworkBurst(centerX, topY - 8);
+      createFireworkBurst(centerX + 74, topY + 24);
+
+      if (fireworksAnimationId === null) {
+        fireworksAnimationId = requestAnimationFrame(animateFireworks);
+      }
+    }
+
+    resizeFireworksCanvas();
+    window.addEventListener('resize', resizeFireworksCanvas);
+
+    function updateExpression() {
+      if (percentApplied && percentLabel !== null) {
+        if (firstNumber !== null && operator !== null) {
+          const firstDisplay = firstNumberLabel ?? formatInputText(firstNumber);
+          expression.textContent = `${firstDisplay} ${operator} ${percentLabel}`;
+        } else {
+          expression.textContent = percentLabel;
+        }
+
+        return;
+      }
+
+      if (firstNumber !== null && operator !== null) {
+        expression.textContent = `${firstNumberLabel ?? formatInputText(firstNumber)} ${operator}`;
+      } else {
+        expression.textContent = '';
+      }
+    }
+
+    function renderHistory() {
+      historyList.innerHTML = '';
+
+      history.slice(0, 18).forEach((item) => {
+        const li = document.createElement('li');
+        li.textContent = item;
+        historyList.appendChild(li);
+      });
+    }
+
+    function resetState() {
+      firstNumber = null;
+      firstNumberLabel = null;
+      operator = null;
+      isNewInput = true;
+      percentApplied = false;
+      percentLabel = null;
+      percentValue = null;
+      updateExpression();
+    }
+
+    function removeCommas(value) {
+      return String(value).replace(/,/g, '');
+    }
+
+    function parseNumber(value) {
+      return parseFloat(removeCommas(value));
+    }
+
+    function formatInputText(value) {
+      const text = removeCommas(value);
+      const sign = text.startsWith('-') ? '-' : '';
+      const unsignedText = sign ? text.slice(1) : text;
+      const [integerPart, decimalPart] = unsignedText.split('.');
+      const cleanedInteger = (integerPart || '0').replace(/^0+(?=\d)/, '');
+      const formattedInteger = cleanedInteger.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+
+      return `${sign}${formattedInteger}${decimalPart !== undefined ? `.${decimalPart}` : ''}`;
+    }
+
+    function formatNumber(value) {
+      const roundedValue = Math.abs(value) < 1e-12 ? 0 : Number(value.toFixed(10));
+
+      return roundedValue.toLocaleString('en-US', {
+        maximumFractionDigits: 10
+      });
+    }
+
+    function handleNumber(value) {
+      if (display.textContent === 'エラー') {
+        clearAll();
+      }
+
+      if (value === '.' && !isNewInput && display.textContent.includes('.')) {
+        return;
+      }
+
+      if (percentApplied) {
+        percentApplied = false;
+        percentLabel = null;
+        percentValue = null;
+        updateExpression();
+      }
+
+      if (isNewInput) {
+        display.textContent = value === '.' ? '0.' : value;
+        isNewInput = false;
+        return;
+      }
+
+      if (display.textContent === '0' && value !== '.') {
+        display.textContent = value;
+        return;
+      }
+
+      display.textContent = formatInputText(`${removeCommas(display.textContent)}${value}`);
+    }
+
+    function handlePercent() {
+      if (display.textContent === 'エラー') {
+        clearAll();
+        return;
+      }
+
+      if (percentApplied) {
+        return;
+      }
+
+      const currentValue = parseNumber(display.textContent);
+
+      if (Number.isNaN(currentValue)) {
+        return;
+      }
+
+      percentLabel = `${formatNumber(currentValue)}%`;
+      percentValue = currentValue / 100;
+
+      if (firstNumber !== null && (operator === '+' || operator === '-')) {
+        percentValue = parseNumber(firstNumber) * percentValue;
+      }
+
+      display.textContent = formatNumber(percentValue);
+      isNewInput = true;
+      percentApplied = true;
+      updateExpression();
+    }
+
+    function handleOperator(selectedOperator) {
+      if (display.textContent === 'エラー') {
+        clearAll();
+        return;
+      }
+
+      if (firstNumber !== null && operator !== null && (!isNewInput || percentApplied)) {
+        calculate(false);
+      }
+
+      const nextFirstNumber = removeCommas(display.textContent);
+      const nextFirstNumberLabel = percentApplied && percentLabel !== null ? percentLabel : formatInputText(nextFirstNumber);
+
+      percentApplied = false;
+      percentLabel = null;
+      percentValue = null;
+      firstNumber = nextFirstNumber;
+      firstNumberLabel = nextFirstNumberLabel;
+      operator = selectedOperator;
+      isNewInput = true;
+      updateExpression();
+    }
+
+    function calculate(showFireworks = true) {
+      if (firstNumber === null || operator === null) {
+        return;
+      }
+
+      const secondNumber = percentApplied && percentLabel !== null ? percentLabel : display.textContent;
+      const firstDisplay = firstNumberLabel ?? formatInputText(firstNumber);
+      const firstValue = parseNumber(firstNumber);
+      const secondValue = percentApplied && percentValue !== null ? percentValue : parseNumber(secondNumber);
+      let result;
+
+      if (operator === '+') {
+        result = firstValue + secondValue;
+      } else if (operator === '-') {
+        result = firstValue - secondValue;
+      } else if (operator === '×') {
+        result = firstValue * secondValue;
+      } else if (operator === '÷') {
+        if (secondValue === 0) {
+          display.textContent = 'エラー';
+          resetState();
+          return;
+        }
+
+        result = firstValue / secondValue;
+      }
+
+      const resultText = formatNumber(result);
+      const historyItem = `${firstDisplay} ${operator} ${secondNumber} = ${resultText}`;
+      history.unshift(historyItem);
+      history = history.slice(0, 20);
+      renderHistory();
+
+      expression.textContent = `${firstDisplay} ${operator} ${secondNumber} =`;
+      display.textContent = resultText;
+      firstNumber = null;
+      firstNumberLabel = null;
+      operator = null;
+      isNewInput = true;
+      percentApplied = false;
+      percentLabel = null;
+      percentValue = null;
+
+      if (showFireworks) {
+        launchFireworks();
+      }
+    }
+
+    function clearAll() {
+      display.textContent = '0';
+      resetState();
+    }
+  </script>
+</body>
+</html>
